@@ -25,6 +25,9 @@ class SerialPortTool:
         self.saving_file = None
         self.is_saving = False
 
+        # Option to add timestamp to received data
+        self.timestamp_var = tk.BooleanVar(value=False)
+
         # Added to store all received data and the filter text
         self.all_received_data = ""
         self.filter_text = ""
@@ -174,6 +177,10 @@ class SerialPortTool:
         self.send_hex_var = tk.BooleanVar()
         self.send_hex_checkbox = ttk.Checkbutton(send_frame, text="Send as HEX", variable=self.send_hex_var)
         self.send_hex_checkbox.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky="w")
+
+        # Timestamp Checkbox
+        self.timestamp_checkbox = ttk.Checkbutton(send_frame, text="Add Timestamp", variable=self.timestamp_var)
+        self.timestamp_checkbox.grid(row=2, column=0, columnspan=2, padx=5, pady=5, sticky="w")
 
         # Status Label (placed below the frames)
         self.status_label = ttk.Label(self.frame, text="", anchor="w")
@@ -391,6 +398,10 @@ class SerialPortTool:
                     except UnicodeDecodeError:
                         decoded_data = data.decode('latin-1', errors='replace')
 
+                    if self.timestamp_var.get():
+                        timestamp = time.strftime("%H:%M:%S")
+                        decoded_data = f"[{timestamp}] {decoded_data}"
+
                     # Append new data to the full received data storage
                     self.all_received_data += decoded_data
                     # Process data with the current filter
@@ -557,6 +568,9 @@ class TCPClientTool:
 
         self.saving_file = None
         self.is_saving = False
+
+        # Option to add timestamp to received data
+        self.timestamp_var = tk.BooleanVar(value=False)
 
         # Store all received data and filter text
         self.all_received_data = ""
@@ -898,12 +912,12 @@ class TCPClientTool:
                 except UnicodeDecodeError:
                     decoded_data = data.decode('latin-1', errors='replace')
 
-                # Add timestamp for network data
-                timestamp = time.strftime("%H:%M:%S")
-                timestamped_data = f"[{timestamp}] {decoded_data}"
+                if self.timestamp_var.get():
+                    timestamp = time.strftime("%H:%M:%S")
+                    decoded_data = f"[{timestamp}] {decoded_data}"
 
-                self.all_received_data += timestamped_data
-                self.notebook.winfo_toplevel().after(0, self.process_received_data, timestamped_data)
+                self.all_received_data += decoded_data
+                self.notebook.winfo_toplevel().after(0, self.process_received_data, decoded_data)
 
                 time.sleep(0.01)
             except socket.timeout:

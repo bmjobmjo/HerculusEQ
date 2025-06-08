@@ -20,6 +20,9 @@ class MQTTTool:
         self.saving_file = None
         self.is_saving = False
 
+        # Option to add timestamp to received data
+        self.timestamp_var = tk.BooleanVar(value=False)
+
         # Added to store all received data and the filter text
         self.all_received_data = ""
         self.filter_text = ""
@@ -169,6 +172,10 @@ class MQTTTool:
         self.send_json_var = tk.BooleanVar()
         self.send_json_checkbox = ttk.Checkbutton(send_frame, text="Format as JSON", variable=self.send_json_var)
         self.send_json_checkbox.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky="w")
+
+        # Timestamp Checkbox
+        self.timestamp_checkbox = ttk.Checkbutton(send_frame, text="Add Timestamp", variable=self.timestamp_var)
+        self.timestamp_checkbox.grid(row=2, column=0, columnspan=2, padx=5, pady=5, sticky="w")
 
         # Status Label
         self.status_label = ttk.Label(self.frame, text="", anchor="w")
@@ -342,9 +349,11 @@ class MQTTTool:
             # Decode the message payload
             payload = msg.payload.decode('utf-8', errors='replace')
 
-            # Format the message with timestamp and topic
-            timestamp = time.strftime("%H:%M:%S")
-            formatted_message = f"[{timestamp}] [{msg.topic}] {payload}\n"
+            if self.timestamp_var.get():
+                timestamp = time.strftime("%H:%M:%S")
+                formatted_message = f"[{timestamp}] [{msg.topic}] {payload}\n"
+            else:
+                formatted_message = f"[{msg.topic}] {payload}\n"
 
             # Process the message in the main thread
             self.notebook.winfo_toplevel().after(0, self.process_received_message, formatted_message)
@@ -597,8 +606,11 @@ class MQTTTool:
                     self.send_combobox.set("")
 
                     # Also display sent message in the received area with a different format
-                    timestamp = time.strftime("%H:%M:%S")
-                    sent_message = f"[{timestamp}] [SENT -> {out_topic}] {message}\n"
+                    if self.timestamp_var.get():
+                        timestamp = time.strftime("%H:%M:%S")
+                        sent_message = f"[{timestamp}] [SENT -> {out_topic}] {message}\n"
+                    else:
+                        sent_message = f"[SENT -> {out_topic}] {message}\n"
                     self.process_received_message(sent_message)
                 else:
                     messagebox.showerror("Publish Error", f"Failed to publish message. Error code: {result.rc}")
