@@ -106,6 +106,16 @@ class SerialPortTool:
         self.frame.grid_rowconfigure(1, weight=0)
         self.frame.grid_rowconfigure(2, weight=0)
 
+        # Buffer limit control
+        limit_frame = ttk.Frame(received_frame)
+        limit_frame.pack(pady=(5, 0), fill=tk.X)
+        ttk.Label(limit_frame, text="Max Chars:").pack(side=tk.LEFT, padx=(5, 0))
+        self.buffer_limit_var = tk.StringVar(value="20000")
+        self.buffer_limit = 20000
+        self.buffer_limit_var.trace_add("write", lambda *args: self.on_buffer_limit_changed())
+        self.buffer_limit_entry = ttk.Entry(limit_frame, textvariable=self.buffer_limit_var, width=10)
+        self.buffer_limit_entry.pack(side=tk.LEFT, padx=5)
+
         self.received_text = scrolledtext.ScrolledText(received_frame, wrap=tk.WORD, state='disabled')
         self.received_text.pack(expand=True, fill="both", padx=5, pady=5)
 
@@ -404,6 +414,7 @@ class SerialPortTool:
 
                     # Append new data to the full received data storage
                     self.all_received_data += decoded_data
+                    self.trim_received_data()
                     # Process data with the current filter
                     self.notebook.winfo_toplevel().after(0, self.process_received_data, decoded_data)
 
@@ -437,6 +448,28 @@ class SerialPortTool:
         self.received_text.insert(tk.END, data)
         self.received_text.see(tk.END)
         # self.received_text.config(state='disabled')
+
+    def get_buffer_limit(self):
+        """Return the maximum number of characters to keep in memory."""
+        return self.buffer_limit
+
+    def trim_received_data(self):
+        """Trim stored data to keep memory usage bounded."""
+        limit = self.get_buffer_limit()
+        if limit > 0 and len(self.all_received_data) > limit:
+            excess = len(self.all_received_data) - limit
+            self.all_received_data = self.all_received_data[excess:]
+
+    def on_buffer_limit_changed(self):
+        """Callback when buffer limit entry is modified."""
+        try:
+            self.buffer_limit = int(self.buffer_limit_var.get())
+        except ValueError:
+            # Revert to previous valid value if parsing fails
+            self.buffer_limit_var.set(str(self.buffer_limit))
+            return
+        self.trim_received_data()
+        self.apply_filter()
 
     def clear_received_text(self):
         """Clears the received data text area and the stored data."""
