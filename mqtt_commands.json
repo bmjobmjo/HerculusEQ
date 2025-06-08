@@ -1,0 +1,7 @@
+[
+  "test 123",
+  "AT+SETINDX 39",
+  "test 123",
+  "AT+SETINDX 39",
+  "AT+SETINDX -1"
+]

@@ -1,0 +1,10 @@
+{
+  "broker": "broker.hivemq.com",
+  "port": "1883",
+  "client_id": "client_1749195755",
+  "username": "",
+  "password": "",
+  "in_topic": "esp32/test2",
+  "out_topic": "esp32/test2",
+  "qos": "0"
+}
