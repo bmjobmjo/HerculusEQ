@@ -25,6 +25,9 @@ class SerialPortTool:
         self.saving_file = None
         self.is_saving = False
 
+        # Option to add timestamp to received data
+        self.timestamp_var = tk.BooleanVar(value=False)
+
         # Added to store all received data and the filter text
         self.all_received_data = ""
         self.filter_text = ""
@@ -103,6 +106,16 @@ class SerialPortTool:
         self.frame.grid_rowconfigure(1, weight=0)
         self.frame.grid_rowconfigure(2, weight=0)
 
+        # Buffer limit control
+        limit_frame = ttk.Frame(received_frame)
+        limit_frame.pack(pady=(5, 0), fill=tk.X)
+        ttk.Label(limit_frame, text="Max Chars:").pack(side=tk.LEFT, padx=(5, 0))
+        self.buffer_limit_var = tk.StringVar(value="20000")
+        self.buffer_limit = 20000
+        self.buffer_limit_var.trace_add("write", lambda *args: self.on_buffer_limit_changed())
+        self.buffer_limit_entry = ttk.Entry(limit_frame, textvariable=self.buffer_limit_var, width=10)
+        self.buffer_limit_entry.pack(side=tk.LEFT, padx=5)
+
         self.received_text = scrolledtext.ScrolledText(received_frame, wrap=tk.WORD, state='disabled')
         self.received_text.pack(expand=True, fill="both", padx=5, pady=5)
 
@@ -174,6 +187,10 @@ class SerialPortTool:
         self.send_hex_var = tk.BooleanVar()
         self.send_hex_checkbox = ttk.Checkbutton(send_frame, text="Send as HEX", variable=self.send_hex_var)
         self.send_hex_checkbox.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky="w")
+
+        # Timestamp Checkbox
+        self.timestamp_checkbox = ttk.Checkbutton(send_frame, text="Add Timestamp", variable=self.timestamp_var)
+        self.timestamp_checkbox.grid(row=2, column=0, columnspan=2, padx=5, pady=5, sticky="w")
 
         # Status Label (placed below the frames)
         self.status_label = ttk.Label(self.frame, text="", anchor="w")
@@ -391,8 +408,13 @@ class SerialPortTool:
                     except UnicodeDecodeError:
                         decoded_data = data.decode('latin-1', errors='replace')
 
+                    if self.timestamp_var.get():
+                        timestamp = time.strftime("%H:%M:%S")
+                        decoded_data = f"[{timestamp}] {decoded_data}"
+
                     # Append new data to the full received data storage
                     self.all_received_data += decoded_data
+                    self.trim_received_data()
                     # Process data with the current filter
                     self.notebook.winfo_toplevel().after(0, self.process_received_data, decoded_data)
 
@@ -426,6 +448,28 @@ class SerialPortTool:
         self.received_text.insert(tk.END, data)
         self.received_text.see(tk.END)
         # self.received_text.config(state='disabled')
+
+    def get_buffer_limit(self):
+        """Return the maximum number of characters to keep in memory."""
+        return self.buffer_limit
+
+    def trim_received_data(self):
+        """Trim stored data to keep memory usage bounded."""
+        limit = self.get_buffer_limit()
+        if limit > 0 and len(self.all_received_data) > limit:
+            excess = len(self.all_received_data) - limit
+            self.all_received_data = self.all_received_data[excess:]
+
+    def on_buffer_limit_changed(self):
+        """Callback when buffer limit entry is modified."""
+        try:
+            self.buffer_limit = int(self.buffer_limit_var.get())
+        except ValueError:
+            # Revert to previous valid value if parsing fails
+            self.buffer_limit_var.set(str(self.buffer_limit))
+            return
+        self.trim_received_data()
+        self.apply_filter()
 
     def clear_received_text(self):
         """Clears the received data text area and the stored data."""
@@ -557,6 +601,9 @@ class TCPClientTool:
 
         self.saving_file = None
         self.is_saving = False
+
+        # Option to add timestamp to received data
+        self.timestamp_var = tk.BooleanVar(value=False)
 
         # Store all received data and filter text
         self.all_received_data = ""
@@ -898,12 +945,12 @@ class TCPClientTool:
                 except UnicodeDecodeError:
                     decoded_data = data.decode('latin-1', errors='replace')
 
-                # Add timestamp for network data
-                timestamp = time.strftime("%H:%M:%S")
-                timestamped_data = f"[{timestamp}] {decoded_data}"
+                if self.timestamp_var.get():
+                    timestamp = time.strftime("%H:%M:%S")
+                    decoded_data = f"[{timestamp}] {decoded_data}"
 
-                self.all_received_data += timestamped_data
-                self.notebook.winfo_toplevel().after(0, self.process_received_data, timestamped_data)
+                self.all_received_data += decoded_data
+                self.notebook.winfo_toplevel().after(0, self.process_received_data, decoded_data)
 
                 time.sleep(0.01)
             except socket.timeout:
