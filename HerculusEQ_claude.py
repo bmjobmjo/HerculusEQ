@@ -2125,6 +2125,34 @@ class UDPTool:
             print(f"Failed to save command history: {e}")
 
 
+class AboutTool:
+    def __init__(self, notebook):
+        self.notebook = notebook
+        self.frame = ttk.Frame(notebook, padding="20")
+        self.frame.pack(expand=True, fill="both")
+        
+        self.create_widgets()
+        
+    def create_widgets(self):
+        title_label = ttk.Label(self.frame, text="HerculusEQ", font=("Helvetica", 24, "bold"))
+        title_label.pack(pady=(20, 10))
+        
+        version_label = ttk.Label(self.frame, text="Version 1.0.20260616", font=("Helvetica", 14))
+        version_label.pack(pady=(0, 20))
+        
+        desc_label = ttk.Label(self.frame, text="A comprehensive, multi-protocol desktop testing utility.\n"
+                                                "Designed for developers, hardware engineers, and IoT integrators.\n\n"
+                                                "Features:\n"
+                                                "- Serial Port Terminal\n"
+                                                "- TCP Client & Server\n"
+                                                "- UDP Terminal\n"
+                                                "- MQTT Client\n"
+                                                "- WebSocket Client\n"
+                                                "- REST Client\n",
+                               justify=tk.CENTER, font=("Helvetica", 12))
+        desc_label.pack(pady=10)
+
+
 class MainApplication:
     def __init__(self, root):
         self.root = root
@@ -2173,6 +2201,10 @@ class MainApplication:
             self.notebook.add(self.settings_tool.frame, text='Settings')
         except Exception:
             pass
+
+        # Create and add About tab
+        self.about_tool = AboutTool(self.notebook)
+        self.notebook.add(self.about_tool.frame, text='About')
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
