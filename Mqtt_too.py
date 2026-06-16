@@ -4,8 +4,14 @@ import threading
 import time
 import os
 import json
+import sys
 import paho.mqtt.client as mqtt
 
+def get_application_path():
+    """Get the path to the application directory (works for dev and frozen/onefile)."""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
 
 class MQTTTool:
     def __init__(self, notebook):
@@ -26,13 +32,13 @@ class MQTTTool:
 
         # Initialize command history before creating widgets
         self.command_history = []
-        self.command_history_file = "mqtt_commands.json"
+        self.command_history_file = os.path.join(get_application_path(), "mqtt_commands.json")
         self.max_history = 20
         self.load_command_history()
 
         # MQTT specific variables
         self.subscribed_topics = []
-        self.settings_file = "mqtt_settings.json"
+        self.settings_file = os.path.join(get_application_path(), "mqtt_settings.json")
 
         self.create_widgets()
         self.load_settings()

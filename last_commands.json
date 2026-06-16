@@ -1,7 +1,22 @@
 [
-  "AT+WIFI Bmjo,bmjobmjo",
   "AT+RWAVE 1,2,3,4",
   "AT+WIFI Bmjo,bmjobmjo",
   "AT+RWAVE 1,2,3,4",
-  "AT+WIFI Bmjo,bmjobmjo"
+  "AT+WIFI Bmjo,bmjobmjo",
+  "AT+RWAVE 1,2,3,4",
+  "AT+WIFI Bmjo,bmjobmjo",
+  "AT",
+  "AT+STIM SR 1,10,100",
+  "AT",
+  "AT+STIM SR 1,10,100",
+  "AA 05 01 FE FF BB",
+  "AA 02 10 43 55 BB",
+  "AA 05 01 FE FF BB",
+  "AA 02 10 43 55 BB",
+  "AA 05 01 FE FF BB",
+  "AA 02 10 43 55 BB",
+  "AT",
+  "AT+RRALGOSEL 1",
+  "AT+RRALGOSEL",
+  "AT+STIM SR 1,10,100"
 ]
