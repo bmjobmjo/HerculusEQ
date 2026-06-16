@@ -78,7 +78,7 @@ class SerialPortTool:
         # Initialize command history before creating widgets
         self.command_history = []
         self.command_history_file = os.path.join(get_application_path(), "last_commands.json")
-        self.max_history = 20  # Increased to store more commands
+        self.max_history = 500  # Increased to store more commands
         self.load_command_history()
 
         self.create_widgets()
@@ -227,9 +227,12 @@ class SerialPortTool:
         self.send_button = ttk.Button(send_frame, text="Send", command=self.send_data)
         self.send_button.grid(row=0, column=1, padx=5, pady=5)
 
+        self.edit_button = ttk.Button(send_frame, text="✎", width=3, command=self.open_big_edit_box)
+        self.edit_button.grid(row=0, column=2, padx=5, pady=5)
+
         # History button (now shows history in separate window)
         self.history_button = ttk.Button(send_frame, text="History", command=self.show_command_history)
-        self.history_button.grid(row=0, column=2, padx=5, pady=5)
+        self.history_button.grid(row=0, column=3, padx=5, pady=5)
 
         # HEX Send Checkbox
         self.send_hex_var = tk.BooleanVar()
@@ -257,6 +260,63 @@ class SerialPortTool:
         reversed_history = list(reversed(self.command_history))
         self.send_combobox['values'] = reversed_history
 
+    def open_big_edit_box(self):
+        edit_window = tk.Toplevel(self.frame)
+        edit_window.title("Big Edit Box")
+        edit_window.geometry("600x400")
+        edit_window.transient(self.frame.winfo_toplevel())
+        edit_window.grab_set()
+
+        # Buttons (pack first to the window so they stay at the bottom)
+        button_frame = ttk.Frame(edit_window, padding="10")
+        button_frame.pack(side=tk.BOTTOM, fill=tk.X)
+
+        main_frame = ttk.Frame(edit_window, padding="10")
+        main_frame.pack(expand=True, fill="both")
+
+        # History selector
+        history_frame = ttk.Frame(main_frame)
+        history_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Label(history_frame, text="Select from History:").pack(side=tk.LEFT, padx=(0, 5))
+        
+        history_combo = ttk.Combobox(history_frame, state="readonly")
+        history_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        reversed_history = list(reversed(self.command_history))
+        history_combo['values'] = reversed_history
+        
+        # Text editing area
+        text_frame = ttk.Frame(main_frame)
+        text_frame.pack(expand=True, fill="both")
+        
+        edit_text = tk.Text(text_frame, wrap=tk.WORD)
+        scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=edit_text.yview)
+        edit_text.configure(yscrollcommand=scrollbar.set)
+        
+        edit_text.pack(side="left", expand=True, fill="both")
+        scrollbar.pack(side="right", fill="y")
+        
+        # Insert current text from the small combobox
+        current_text = self.send_combobox.get()
+        edit_text.insert(tk.END, current_text)
+
+        def on_history_select(event):
+            selected = history_combo.get()
+            if selected:
+                edit_text.delete('1.0', tk.END)
+                edit_text.insert(tk.END, selected)
+                
+        history_combo.bind("<<ComboboxSelected>>", on_history_select)
+        
+        def send_from_edit():
+            msg = edit_text.get('1.0', tk.END).strip()
+            if msg:
+                self.send_combobox.set(msg)
+                self.send_data()
+                edit_window.destroy()
+                
+        ttk.Button(button_frame, text="Send", command=send_from_edit).pack(side="left", padx=(0, 5))
+        ttk.Button(button_frame, text="Close", command=edit_window.destroy).pack(side="left")
+
     def show_command_history(self):
         """Show previous commands in a popup window."""
         history_window = tk.Toplevel(self.frame)
@@ -272,31 +332,39 @@ class SerialPortTool:
         # Add label
         ttk.Label(main_frame, text="Recent Commands (most recent first):").pack(anchor="w", pady=(0, 5))
 
-        # Create text widget with scrollbar
-        text_frame = ttk.Frame(main_frame)
-        text_frame.pack(expand=True, fill="both")
-
-        text_widget = tk.Text(text_frame, wrap=tk.WORD)
-        scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=text_widget.yview)
-        text_widget.configure(yscrollcommand=scrollbar.set)
-
-        text_widget.pack(side="left", expand=True, fill="both")
-        scrollbar.pack(side="right", fill="y")
-
-        # Insert history (most recent first)
-        reversed_history = list(reversed(self.command_history))
-        for i, cmd in enumerate(reversed_history, 1):
-            text_widget.insert(tk.END, f"{i:2d}. {cmd}\n")
-
-        text_widget.config(state='disabled')  # Make read-only
-
-        # Button frame
+        # Buttons (pack first so they stay at the bottom)
         button_frame = ttk.Frame(main_frame)
-        button_frame.pack(pady=(10, 0))
+        button_frame.pack(side=tk.BOTTOM, pady=(10, 0))
 
         ttk.Button(button_frame, text="Clear History", command=lambda: self.clear_command_history(history_window)).pack(
             side="left", padx=(0, 5))
         ttk.Button(button_frame, text="Close", command=history_window.destroy).pack(side="left")
+
+        # Create listbox widget with scrollbar
+        listbox_frame = ttk.Frame(main_frame)
+        listbox_frame.pack(expand=True, fill="both")
+
+        scrollbar = ttk.Scrollbar(listbox_frame, orient="vertical")
+        listbox = tk.Listbox(listbox_frame, yscrollcommand=scrollbar.set, font=("Consolas", 10))
+        scrollbar.config(command=listbox.yview)
+
+        listbox.pack(side="left", expand=True, fill="both")
+        scrollbar.pack(side="right", fill="y")
+
+        # Insert history
+        reversed_history = list(reversed(self.command_history))
+        for cmd in reversed_history:
+            listbox.insert(tk.END, cmd)
+            
+        def on_history_select(event):
+            selection = listbox.curselection()
+            if selection:
+                index = selection[0]
+                selected_cmd = listbox.get(index)
+                self.send_combobox.set(selected_cmd)
+                history_window.destroy()
+                
+        listbox.bind('<<ListboxSelect>>', on_history_select)
 
     def clear_command_history(self, window):
         """Clear all command history."""
@@ -767,7 +835,7 @@ class TCPClientTool:
         # Initialize command history before creating widgets
         self.command_history = []
         self.command_history_file = os.path.join(get_application_path(), "tcp_commands.json")
-        self.max_history = 20
+        self.max_history = 500
         self.load_command_history()
 
         self.create_widgets()
@@ -875,9 +943,12 @@ class TCPClientTool:
         self.send_button = ttk.Button(send_frame, text="Send", command=self.send_data)
         self.send_button.grid(row=0, column=1, padx=5, pady=5)
 
+        self.edit_button = ttk.Button(send_frame, text="✎", width=3, command=self.open_big_edit_box)
+        self.edit_button.grid(row=0, column=2, padx=5, pady=5)
+
         # History button
         self.history_button = ttk.Button(send_frame, text="History", command=self.show_command_history)
-        self.history_button.grid(row=0, column=2, padx=5, pady=5)
+        self.history_button.grid(row=0, column=3, padx=5, pady=5)
 
         # HEX Send Checkbox
         self.send_hex_var = tk.BooleanVar()
@@ -906,6 +977,63 @@ class TCPClientTool:
         reversed_history = list(reversed(self.command_history))
         self.send_combobox['values'] = reversed_history
 
+    def open_big_edit_box(self):
+        edit_window = tk.Toplevel(self.frame)
+        edit_window.title("Big Edit Box")
+        edit_window.geometry("600x400")
+        edit_window.transient(self.frame.winfo_toplevel())
+        edit_window.grab_set()
+
+        # Buttons (pack first to the window so they stay at the bottom)
+        button_frame = ttk.Frame(edit_window, padding="10")
+        button_frame.pack(side=tk.BOTTOM, fill=tk.X)
+
+        main_frame = ttk.Frame(edit_window, padding="10")
+        main_frame.pack(expand=True, fill="both")
+
+        # History selector
+        history_frame = ttk.Frame(main_frame)
+        history_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Label(history_frame, text="Select from History:").pack(side=tk.LEFT, padx=(0, 5))
+        
+        history_combo = ttk.Combobox(history_frame, state="readonly")
+        history_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        reversed_history = list(reversed(self.command_history))
+        history_combo['values'] = reversed_history
+        
+        # Text editing area
+        text_frame = ttk.Frame(main_frame)
+        text_frame.pack(expand=True, fill="both")
+        
+        edit_text = tk.Text(text_frame, wrap=tk.WORD)
+        scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=edit_text.yview)
+        edit_text.configure(yscrollcommand=scrollbar.set)
+        
+        edit_text.pack(side="left", expand=True, fill="both")
+        scrollbar.pack(side="right", fill="y")
+        
+        # Insert current text from the small combobox
+        current_text = self.send_combobox.get()
+        edit_text.insert(tk.END, current_text)
+
+        def on_history_select(event):
+            selected = history_combo.get()
+            if selected:
+                edit_text.delete('1.0', tk.END)
+                edit_text.insert(tk.END, selected)
+                
+        history_combo.bind("<<ComboboxSelected>>", on_history_select)
+        
+        def send_from_edit():
+            msg = edit_text.get('1.0', tk.END).strip()
+            if msg:
+                self.send_combobox.set(msg)
+                self.send_data()
+                edit_window.destroy()
+                
+        ttk.Button(button_frame, text="Send", command=send_from_edit).pack(side="left", padx=(0, 5))
+        ttk.Button(button_frame, text="Close", command=edit_window.destroy).pack(side="left")
+
     def show_command_history(self):
         """Show previous commands in a popup window."""
         history_window = tk.Toplevel(self.frame)
@@ -919,28 +1047,39 @@ class TCPClientTool:
 
         ttk.Label(main_frame, text="Recent Commands (most recent first):").pack(anchor="w", pady=(0, 5))
 
-        text_frame = ttk.Frame(main_frame)
-        text_frame.pack(expand=True, fill="both")
-
-        text_widget = tk.Text(text_frame, wrap=tk.WORD)
-        scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=text_widget.yview)
-        text_widget.configure(yscrollcommand=scrollbar.set)
-
-        text_widget.pack(side="left", expand=True, fill="both")
-        scrollbar.pack(side="right", fill="y")
-
-        reversed_history = list(reversed(self.command_history))
-        for i, cmd in enumerate(reversed_history, 1):
-            text_widget.insert(tk.END, f"{i:2d}. {cmd}\n")
-
-        text_widget.config(state='disabled')
-
+        # Buttons (pack first so they stay at the bottom)
         button_frame = ttk.Frame(main_frame)
-        button_frame.pack(pady=(10, 0))
+        button_frame.pack(side=tk.BOTTOM, pady=(10, 0))
 
         ttk.Button(button_frame, text="Clear History", command=lambda: self.clear_command_history(history_window)).pack(
             side="left", padx=(0, 5))
         ttk.Button(button_frame, text="Close", command=history_window.destroy).pack(side="left")
+
+        # Create listbox widget with scrollbar
+        listbox_frame = ttk.Frame(main_frame)
+        listbox_frame.pack(expand=True, fill="both")
+
+        scrollbar = ttk.Scrollbar(listbox_frame, orient="vertical")
+        listbox = tk.Listbox(listbox_frame, yscrollcommand=scrollbar.set, font=("Consolas", 10))
+        scrollbar.config(command=listbox.yview)
+
+        listbox.pack(side="left", expand=True, fill="both")
+        scrollbar.pack(side="right", fill="y")
+
+        # Insert history
+        reversed_history = list(reversed(self.command_history))
+        for cmd in reversed_history:
+            listbox.insert(tk.END, cmd)
+            
+        def on_history_select(event):
+            selection = listbox.curselection()
+            if selection:
+                index = selection[0]
+                selected_cmd = listbox.get(index)
+                self.send_combobox.set(selected_cmd)
+                history_window.destroy()
+                
+        listbox.bind('<<ListboxSelect>>', on_history_select)
 
     def clear_command_history(self, window):
         """Clear all command history."""
@@ -1257,6 +1396,11 @@ class TCPServerTool:
         self.server_thread = None
         self.stop_event = threading.Event()
 
+        self.command_history = []
+        self.command_history_file = os.path.join(get_application_path(), "tcpserver_commands.json")
+        self.max_history = 500
+        self.load_command_history()
+
         self.create_widgets()
 
     def create_widgets(self):
@@ -1286,8 +1430,11 @@ class TCPServerTool:
         send_frame = ttk.LabelFrame(self.frame, text="Send Data")
         send_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        self.data_entry = ttk.Entry(send_frame, width=50)
-        self.data_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5, pady=5)
+        self.send_combobox = ttk.Combobox(send_frame, width=50)
+        self.send_combobox.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5, pady=5)
+        self.send_combobox.bind("<Return>", lambda event=None: self.send_data_to_client())
+        self.send_combobox.bind("<KeyRelease>", self.on_combobox_key_release)
+        self.send_combobox.bind("<Button-1>", self.update_combobox_values)
 
         self.client_selector = ttk.Combobox(send_frame, state="readonly")
         self.client_selector.pack(side=tk.LEFT, padx=5)
@@ -1295,6 +1442,14 @@ class TCPServerTool:
 
         self.send_button = ttk.Button(send_frame, text="Send", command=self.send_data_to_client)
         self.send_button.pack(side=tk.LEFT, padx=5)
+
+        self.edit_button = ttk.Button(send_frame, text="✎", width=3, command=self.open_big_edit_box)
+        self.edit_button.pack(side=tk.LEFT, padx=5)
+
+        self.history_button = ttk.Button(send_frame, text="History", command=self.show_command_history)
+        self.history_button.pack(side=tk.LEFT, padx=5)
+
+        self.update_combobox_values()
 
     def update_status(self, message):
         self.status_box.config(state='normal')
@@ -1399,10 +1554,17 @@ class TCPServerTool:
             messagebox.showwarning("Warning", "No client selected.")
             return
 
-        data_to_send = self.data_entry.get()
+        data_to_send = self.send_combobox.get()
         if not data_to_send:
             messagebox.showwarning("Warning", "No data to send.")
             return
+
+        if not self.command_history or self.command_history[-1] != data_to_send:
+            self.command_history.append(data_to_send)
+            if len(self.command_history) > self.max_history:
+                self.command_history = self.command_history[-self.max_history:]
+            self.save_command_history()
+            self.update_combobox_values()
 
         client_socket = self.clients.get(selected_client)
         if client_socket:
@@ -1423,6 +1585,139 @@ class TCPServerTool:
             self.client_selector['values'] = []
             self.client_selector.set("No clients connected")
 
+    def on_combobox_key_release(self, event):
+        pass
+
+    def update_combobox_values(self, event=None):
+        reversed_history = list(reversed(self.command_history))
+        self.send_combobox['values'] = reversed_history
+
+    def open_big_edit_box(self):
+        edit_window = tk.Toplevel(self.frame)
+        edit_window.title("Big Edit Box")
+        edit_window.geometry("600x400")
+        edit_window.transient(self.frame.winfo_toplevel())
+        edit_window.grab_set()
+
+        # Buttons (pack first to the window so they stay at the bottom)
+        button_frame = ttk.Frame(edit_window, padding="10")
+        button_frame.pack(side=tk.BOTTOM, fill=tk.X)
+
+        main_frame = ttk.Frame(edit_window, padding="10")
+        main_frame.pack(expand=True, fill="both")
+
+        # History selector
+        history_frame = ttk.Frame(main_frame)
+        history_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Label(history_frame, text="Select from History:").pack(side=tk.LEFT, padx=(0, 5))
+        
+        history_combo = ttk.Combobox(history_frame, state="readonly")
+        history_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        reversed_history = list(reversed(self.command_history))
+        history_combo['values'] = reversed_history
+        
+        # Text editing area
+        text_frame = ttk.Frame(main_frame)
+        text_frame.pack(expand=True, fill="both")
+        
+        edit_text = tk.Text(text_frame, wrap=tk.WORD)
+        scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=edit_text.yview)
+        edit_text.configure(yscrollcommand=scrollbar.set)
+        
+        edit_text.pack(side="left", expand=True, fill="both")
+        scrollbar.pack(side="right", fill="y")
+        
+        # Insert current text from the small combobox
+        current_text = self.send_combobox.get()
+        edit_text.insert(tk.END, current_text)
+
+        def on_history_select(event):
+            selected = history_combo.get()
+            if selected:
+                edit_text.delete('1.0', tk.END)
+                edit_text.insert(tk.END, selected)
+                
+        history_combo.bind("<<ComboboxSelected>>", on_history_select)
+        
+        def send_from_edit():
+            msg = edit_text.get('1.0', tk.END).strip()
+            if msg:
+                self.send_combobox.set(msg)
+                self.send_data_to_client()
+                edit_window.destroy()
+                
+        ttk.Button(button_frame, text="Send", command=send_from_edit).pack(side="left", padx=(0, 5))
+        ttk.Button(button_frame, text="Close", command=edit_window.destroy).pack(side="left")
+
+    def show_command_history(self):
+        history_window = tk.Toplevel(self.frame)
+        history_window.title("Command History")
+        history_window.geometry("500x300")
+        history_window.transient(self.frame.winfo_toplevel())
+        history_window.grab_set()
+
+        main_frame = ttk.Frame(history_window, padding="10")
+        main_frame.pack(expand=True, fill="both")
+
+        ttk.Label(main_frame, text="Recent Commands (most recent first):").pack(anchor="w", pady=(0, 5))
+
+        # Buttons (pack first so they stay at the bottom)
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(side=tk.BOTTOM, pady=(10, 0))
+
+        ttk.Button(button_frame, text="Clear History", command=lambda: self.clear_command_history(history_window)).pack(side="left", padx=(0, 5))
+        ttk.Button(button_frame, text="Close", command=history_window.destroy).pack(side="left")
+
+        listbox_frame = ttk.Frame(main_frame)
+        listbox_frame.pack(expand=True, fill="both")
+
+        scrollbar = ttk.Scrollbar(listbox_frame, orient="vertical")
+        listbox = tk.Listbox(listbox_frame, yscrollcommand=scrollbar.set, font=("Consolas", 10))
+        scrollbar.config(command=listbox.yview)
+
+        listbox.pack(side="left", expand=True, fill="both")
+        scrollbar.pack(side="right", fill="y")
+
+        reversed_history = list(reversed(self.command_history))
+        for cmd in reversed_history:
+            listbox.insert(tk.END, cmd)
+            
+        def on_history_select(event):
+            selection = listbox.curselection()
+            if selection:
+                index = selection[0]
+                selected_cmd = listbox.get(index)
+                self.send_combobox.set(selected_cmd)
+                history_window.destroy()
+                
+        listbox.bind('<<ListboxSelect>>', on_history_select)
+
+    def clear_command_history(self, window):
+        result = messagebox.askyesno("Clear History", "Are you sure you want to clear all command history?", parent=window)
+        if result:
+            self.command_history = []
+            self.save_command_history()
+            self.update_combobox_values()
+            window.destroy()
+            messagebox.showinfo("History Cleared", "Command history has been cleared.")
+
+    def load_command_history(self):
+        if os.path.exists(self.command_history_file):
+            try:
+                with open(self.command_history_file, "r") as f:
+                    self.command_history = json.load(f)
+            except Exception as e:
+                print(f"Failed to load command history: {e}")
+                self.command_history = []
+
+    def save_command_history(self):
+        try:
+            history_to_save = self.command_history[-self.max_history:]
+            with open(self.command_history_file, "w") as f:
+                json.dump(history_to_save, f, indent=2)
+        except Exception as e:
+            print(f"Failed to save command history: {e}")
+
 
 class UDPTool:
     def __init__(self, notebook):
@@ -1434,6 +1729,11 @@ class UDPTool:
         self.is_running = False
         self.receive_thread = None
         self.stop_event = threading.Event()
+
+        self.command_history = []
+        self.command_history_file = os.path.join(get_application_path(), "udp_commands.json")
+        self.max_history = 500
+        self.load_command_history()
 
         # Config variables
         self.mode_var = tk.StringVar(value="Both")
@@ -1491,11 +1791,22 @@ class UDPTool:
         self.send_frame = ttk.LabelFrame(self.frame, text="Send Data")
         self.send_frame.grid(row=1, column=0, padx=10, pady=10, sticky="sw")
 
-        self.send_entry = ttk.Entry(self.send_frame, width=30)
-        self.send_entry.pack(side=tk.LEFT, padx=5, pady=5, expand=True, fill=tk.X)
+        self.send_combobox = ttk.Combobox(self.send_frame, width=30)
+        self.send_combobox.pack(side=tk.LEFT, padx=5, pady=5, expand=True, fill=tk.X)
+        self.send_combobox.bind("<Return>", lambda event=None: self.send_data())
+        self.send_combobox.bind("<KeyRelease>", self.on_combobox_key_release)
+        self.send_combobox.bind("<Button-1>", self.update_combobox_values)
 
         self.send_button = ttk.Button(self.send_frame, text="Send", command=self.send_data)
         self.send_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        self.edit_button = ttk.Button(self.send_frame, text="✎", width=3, command=self.open_big_edit_box)
+        self.edit_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        self.history_button = ttk.Button(self.send_frame, text="History", command=self.show_command_history)
+        self.history_button.pack(side=tk.LEFT, padx=5, pady=5)
+        
+        self.update_combobox_values()
 
         self.status_label = ttk.Label(self.frame, text="Status: Stopped", foreground="red")
         self.status_label.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="w")
@@ -1658,20 +1969,160 @@ class UDPTool:
                  return
             
             target_port = int(target_port_str)
-            data = self.send_entry.get()
+            data = self.send_combobox.get()
 
             if not data:
                 return
 
+            if not self.command_history or self.command_history[-1] != data:
+                self.command_history.append(data)
+                if len(self.command_history) > self.max_history:
+                    self.command_history = self.command_history[-self.max_history:]
+                self.save_command_history()
+                self.update_combobox_values()
+
             self.socket.sendto(data.encode('utf-8'), (target_ip, target_port))
             timestamp = time.strftime("%H:%M:%S")
             self.append_received(f"[{timestamp}] [You -> {target_ip}:{target_port}] {data}\n")
-            self.send_entry.delete(0, tk.END)
+            self.send_combobox.set("")
         except Exception as e:
             messagebox.showerror("Send Error", f"Failed to send: {e}")
 
     def update_status(self, text, color):
-        self.status_label.config(text=text, foreground=color)
+        self.status_label.config(text=f"Status: {text}", foreground=color)
+
+    def on_combobox_key_release(self, event):
+        pass
+
+    def update_combobox_values(self, event=None):
+        reversed_history = list(reversed(self.command_history))
+        self.send_combobox['values'] = reversed_history
+
+    def open_big_edit_box(self):
+        edit_window = tk.Toplevel(self.frame)
+        edit_window.title("Big Edit Box")
+        edit_window.geometry("600x400")
+        edit_window.transient(self.frame.winfo_toplevel())
+        edit_window.grab_set()
+
+        # Buttons (pack first to the window so they stay at the bottom)
+        button_frame = ttk.Frame(edit_window, padding="10")
+        button_frame.pack(side=tk.BOTTOM, fill=tk.X)
+
+        main_frame = ttk.Frame(edit_window, padding="10")
+        main_frame.pack(expand=True, fill="both")
+
+        # History selector
+        history_frame = ttk.Frame(main_frame)
+        history_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Label(history_frame, text="Select from History:").pack(side=tk.LEFT, padx=(0, 5))
+        
+        history_combo = ttk.Combobox(history_frame, state="readonly")
+        history_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        reversed_history = list(reversed(self.command_history))
+        history_combo['values'] = reversed_history
+        
+        # Text editing area
+        text_frame = ttk.Frame(main_frame)
+        text_frame.pack(expand=True, fill="both")
+        
+        edit_text = tk.Text(text_frame, wrap=tk.WORD)
+        scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=edit_text.yview)
+        edit_text.configure(yscrollcommand=scrollbar.set)
+        
+        edit_text.pack(side="left", expand=True, fill="both")
+        scrollbar.pack(side="right", fill="y")
+        
+        # Insert current text from the small combobox
+        current_text = self.send_combobox.get()
+        edit_text.insert(tk.END, current_text)
+
+        def on_history_select(event):
+            selected = history_combo.get()
+            if selected:
+                edit_text.delete('1.0', tk.END)
+                edit_text.insert(tk.END, selected)
+                
+        history_combo.bind("<<ComboboxSelected>>", on_history_select)
+        
+        def send_from_edit():
+            msg = edit_text.get('1.0', tk.END).strip()
+            if msg:
+                self.send_combobox.set(msg)
+                self.send_data()
+                edit_window.destroy()
+                
+        ttk.Button(button_frame, text="Send", command=send_from_edit).pack(side="left", padx=(0, 5))
+        ttk.Button(button_frame, text="Close", command=edit_window.destroy).pack(side="left")
+
+    def show_command_history(self):
+        history_window = tk.Toplevel(self.frame)
+        history_window.title("Command History")
+        history_window.geometry("500x300")
+        history_window.transient(self.frame.winfo_toplevel())
+        history_window.grab_set()
+
+        main_frame = ttk.Frame(history_window, padding="10")
+        main_frame.pack(expand=True, fill="both")
+
+        ttk.Label(main_frame, text="Recent Commands (most recent first):").pack(anchor="w", pady=(0, 5))
+
+        # Buttons (pack first so they stay at the bottom)
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(side=tk.BOTTOM, pady=(10, 0))
+
+        ttk.Button(button_frame, text="Clear History", command=lambda: self.clear_command_history(history_window)).pack(side="left", padx=(0, 5))
+        ttk.Button(button_frame, text="Close", command=history_window.destroy).pack(side="left")
+
+        listbox_frame = ttk.Frame(main_frame)
+        listbox_frame.pack(expand=True, fill="both")
+
+        scrollbar = ttk.Scrollbar(listbox_frame, orient="vertical")
+        listbox = tk.Listbox(listbox_frame, yscrollcommand=scrollbar.set, font=("Consolas", 10))
+        scrollbar.config(command=listbox.yview)
+
+        listbox.pack(side="left", expand=True, fill="both")
+        scrollbar.pack(side="right", fill="y")
+
+        reversed_history = list(reversed(self.command_history))
+        for cmd in reversed_history:
+            listbox.insert(tk.END, cmd)
+            
+        def on_history_select(event):
+            selection = listbox.curselection()
+            if selection:
+                index = selection[0]
+                selected_cmd = listbox.get(index)
+                self.send_combobox.set(selected_cmd)
+                history_window.destroy()
+                
+        listbox.bind('<<ListboxSelect>>', on_history_select)
+
+    def clear_command_history(self, window):
+        result = messagebox.askyesno("Clear History", "Are you sure you want to clear all command history?", parent=window)
+        if result:
+            self.command_history = []
+            self.save_command_history()
+            self.update_combobox_values()
+            window.destroy()
+            messagebox.showinfo("History Cleared", "Command history has been cleared.")
+
+    def load_command_history(self):
+        if os.path.exists(self.command_history_file):
+            try:
+                with open(self.command_history_file, "r") as f:
+                    self.command_history = json.load(f)
+            except Exception as e:
+                print(f"Failed to load command history: {e}")
+                self.command_history = []
+
+    def save_command_history(self):
+        try:
+            history_to_save = self.command_history[-self.max_history:]
+            with open(self.command_history_file, "w") as f:
+                json.dump(history_to_save, f, indent=2)
+        except Exception as e:
+            print(f"Failed to save command history: {e}")
 
 
 class MainApplication:

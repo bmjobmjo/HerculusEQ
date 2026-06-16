@@ -32,7 +32,7 @@ class WebSocketTool:
 
         self.command_history = []
         self.command_history_file = os.path.join(get_application_path(), "websocket_commands.json")
-        self.max_history = 10000  # Store effectively all commands
+        self.max_history = 500  # Increased limit
         self.load_command_history()
 
         self.settings_file = os.path.join(get_application_path(), "websocket_settings.json")
@@ -166,6 +166,10 @@ class WebSocketTool:
         edit_window.transient(self.frame.winfo_toplevel())
         edit_window.grab_set()
 
+        # Buttons (pack first to the window so they stay at the bottom)
+        button_frame = ttk.Frame(edit_window, padding="10")
+        button_frame.pack(side=tk.BOTTOM, fill=tk.X)
+
         main_frame = ttk.Frame(edit_window, padding="10")
         main_frame.pack(expand=True, fill="both")
 
@@ -202,9 +206,16 @@ class WebSocketTool:
                 
         history_combo.bind("<<ComboboxSelected>>", on_history_select)
 
-        # Buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X, pady=(10, 0))
+        # Text editing area
+        text_frame = ttk.Frame(main_frame)
+        text_frame.pack(expand=True, fill="both")
+        
+        edit_text = tk.Text(text_frame, wrap=tk.WORD)
+        scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=edit_text.yview)
+        edit_text.configure(yscrollcommand=scrollbar.set)
+        
+        edit_text.pack(side="left", expand=True, fill="both")
+        scrollbar.pack(side="right", fill="y")
         
         def send_from_edit():
             msg = edit_text.get('1.0', tk.END).strip()
@@ -229,27 +240,36 @@ class WebSocketTool:
 
         ttk.Label(main_frame, text="Recent Messages (most recent first):").pack(anchor="w", pady=(0, 5))
 
-        text_frame = ttk.Frame(main_frame)
-        text_frame.pack(expand=True, fill="both")
-
-        text_widget = tk.Text(text_frame, wrap=tk.WORD)
-        scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=text_widget.yview)
-        text_widget.configure(yscrollcommand=scrollbar.set)
-
-        text_widget.pack(side="left", expand=True, fill="both")
-        scrollbar.pack(side="right", fill="y")
-
-        reversed_history = list(reversed(self.command_history))
-        for i, cmd in enumerate(reversed_history, 1):
-            text_widget.insert(tk.END, f"{i:2d}. {cmd}\n")
-
-        text_widget.config(state='disabled')
-
+        # Buttons (pack first so they stay at the bottom)
         button_frame = ttk.Frame(main_frame)
-        button_frame.pack(pady=(10, 0))
+        button_frame.pack(side=tk.BOTTOM, pady=(10, 0))
 
         ttk.Button(button_frame, text="Clear History", command=lambda: self.clear_command_history(history_window)).pack(side="left", padx=(0, 5))
         ttk.Button(button_frame, text="Close", command=history_window.destroy).pack(side="left")
+
+        listbox_frame = ttk.Frame(main_frame)
+        listbox_frame.pack(expand=True, fill="both")
+
+        scrollbar = ttk.Scrollbar(listbox_frame, orient="vertical")
+        listbox = tk.Listbox(listbox_frame, yscrollcommand=scrollbar.set, font=("Consolas", 10))
+        scrollbar.config(command=listbox.yview)
+
+        listbox.pack(side="left", expand=True, fill="both")
+        scrollbar.pack(side="right", fill="y")
+
+        reversed_history = list(reversed(self.command_history))
+        for cmd in reversed_history:
+            listbox.insert(tk.END, cmd)
+            
+        def on_history_select(event):
+            selection = listbox.curselection()
+            if selection:
+                index = selection[0]
+                selected_cmd = listbox.get(index)
+                self.send_combobox.set(selected_cmd)
+                history_window.destroy()
+                
+        listbox.bind('<<ListboxSelect>>', on_history_select)
 
     def clear_command_history(self, window):
         result = messagebox.askyesno("Clear History", "Are you sure you want to clear all message history?", parent=window)
